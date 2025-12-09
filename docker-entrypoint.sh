@@ -5,7 +5,7 @@ echo "Starting Better Smokeping..."
 
 # Initialize database
 echo "Initializing database..."
-npx prisma db push --accept-data-loss || echo "Database already initialized"
+node_modules/.bin/prisma db push --accept-data-loss || echo "Database already initialized"
 
 # Sync configuration to database
 echo "Syncing configuration..."
