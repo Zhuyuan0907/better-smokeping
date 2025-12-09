@@ -7,6 +7,10 @@ echo "Starting Better Smokeping..."
 echo "Initializing database..."
 npx prisma db push --accept-data-loss || echo "Database already initialized"
 
+# Sync configuration to database
+echo "Syncing configuration..."
+node scripts/sync-config.js || echo "Config sync completed"
+
 # Start monitoring service in background
 echo "Starting monitoring service..."
 node scripts/monitor.js &

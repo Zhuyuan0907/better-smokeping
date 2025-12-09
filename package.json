@@ -10,9 +10,9 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
-    "db:seed": "node scripts/seed.js",
+    "sync-config": "node scripts/sync-config.js",
     "monitor": "node scripts/monitor.js",
-    "setup": "npm install && prisma db push && node scripts/seed.js"
+    "setup": "npm install && prisma db push && node scripts/sync-config.js"
   },
   "dependencies": {
     "@prisma/client": "^5.7.1",
