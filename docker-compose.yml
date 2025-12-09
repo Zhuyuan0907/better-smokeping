@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  better-smokeping:
+    build: .
+    container_name: better-smokeping
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PING_INTERVAL=60000
+      - PING_COUNT=10
+      - DATABASE_URL=file:/app/data/smokeping.db
+    volumes:
+      - ./data:/app/data
+      - ./prisma:/app/prisma
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    networks:
+      - smokeping-network
+
+networks:
+  smokeping-network:
+    driver: bridge

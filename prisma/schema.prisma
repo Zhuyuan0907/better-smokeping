@@ -1,0 +1,60 @@
+// Prisma Schema for Better Smokeping
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./smokeping.db"
+}
+
+model Target {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  host        String
+  description String?
+  group       String   @default("default")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pingResults       PingResult[]
+  tracerouteResults TracerouteResult[]
+
+  @@index([group])
+  @@index([enabled])
+}
+
+model PingResult {
+  id               Int      @id @default(autoincrement())
+  targetId         Int
+  timestamp        DateTime @default(now())
+  minRtt           Float?
+  avgRtt           Float?
+  maxRtt           Float?
+  packetLoss       Float?
+  packetsSent      Int?
+  packetsReceived  Int?
+  jitter           Float?
+  isAlive          Boolean  @default(false)
+
+  target Target @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([targetId])
+  @@index([timestamp])
+}
+
+model TracerouteResult {
+  id                  Int      @id @default(autoincrement())
+  targetId            Int
+  timestamp           DateTime @default(now())
+  hops                String   // JSON string
+  destinationReached  Boolean  @default(false)
+  totalHops           Int      @default(0)
+
+  target Target @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([targetId])
+  @@index([timestamp])
+}
