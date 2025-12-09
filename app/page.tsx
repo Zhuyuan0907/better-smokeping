@@ -4,18 +4,16 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Activity, Plus, RefreshCw } from 'lucide-react'
+import { Activity, RefreshCw } from 'lucide-react'
 import TargetSidebar from '@/components/TargetSidebar'
 import LatencyChart from '@/components/LatencyChart'
 import StatsCards from '@/components/StatsCards'
-import AddTargetDialog from '@/components/AddTargetDialog'
 
 export default function HomePage() {
   const [targets, setTargets] = useState<any[]>([])
   const [selectedTarget, setSelectedTarget] = useState<any>(null)
   const [timeRange, setTimeRange] = useState<string>('24')
   const [loading, setLoading] = useState(true)
-  const [showAddDialog, setShowAddDialog] = useState(false)
 
   useEffect(() => {
     fetchTargets()
@@ -47,22 +45,6 @@ export default function HomePage() {
     }
   }
 
-  const handleAddTarget = async (targetData: any) => {
-    try {
-      const res = await fetch('/api/targets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(targetData),
-      })
-
-      if (res.ok) {
-        await fetchTargets()
-        setShowAddDialog(false)
-      }
-    } catch (error) {
-      console.error('Failed to add target:', error)
-    }
-  }
 
   const handleRunPing = async () => {
     if (!selectedTarget) return
@@ -96,7 +78,6 @@ export default function HomePage() {
         targets={targets}
         selectedTarget={selectedTarget}
         onSelectTarget={setSelectedTarget}
-        onAddTarget={() => setShowAddDialog(true)}
         onRefresh={fetchTargets}
       />
 
@@ -157,25 +138,14 @@ export default function HomePage() {
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <Activity className="h-16 w-16 text-muted-foreground mb-4" />
                 <h3 className="text-xl font-semibold mb-2">No Target Selected</h3>
-                <p className="text-muted-foreground mb-6">
-                  Add a monitoring target to get started
+                <p className="text-muted-foreground">
+                  Select a monitoring target from the sidebar or edit config/targets.json to add more
                 </p>
-                <Button onClick={() => setShowAddDialog(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Target
-                </Button>
               </CardContent>
             </Card>
           )}
         </div>
       </div>
-
-      {/* Add Target Dialog */}
-      <AddTargetDialog
-        open={showAddDialog}
-        onOpenChange={setShowAddDialog}
-        onSubmit={handleAddTarget}
-      />
     </div>
   )
 }

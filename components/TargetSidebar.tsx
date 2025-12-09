@@ -2,14 +2,13 @@
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, RefreshCw, Activity, AlertCircle } from 'lucide-react'
+import { RefreshCw, Activity, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface TargetSidebarProps {
   targets: any[]
   selectedTarget: any
   onSelectTarget: (target: any) => void
-  onAddTarget: () => void
   onRefresh: () => void
 }
 
@@ -17,7 +16,6 @@ export default function TargetSidebar({
   targets,
   selectedTarget,
   onSelectTarget,
-  onAddTarget,
   onRefresh,
 }: TargetSidebarProps) {
   const groupedTargets = targets.reduce((acc, target) => {
@@ -33,16 +31,12 @@ export default function TargetSidebar({
     <div className="w-80 border-r bg-white dark:bg-slate-900 flex flex-col">
       {/* Sidebar Header */}
       <div className="p-6 border-b">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold">Targets</h2>
           <Button size="icon" variant="ghost" onClick={onRefresh}>
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
-        <Button className="w-full" onClick={onAddTarget}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Target
-        </Button>
       </div>
 
       {/* Target List */}
@@ -52,7 +46,7 @@ export default function TargetSidebar({
             <AlertCircle className="h-12 w-12 text-muted-foreground mb-3" />
             <p className="text-sm text-muted-foreground">No targets configured</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Click &quot;Add Target&quot; to get started
+              Edit config/targets.json to add targets
             </p>
           </div>
         ) : (
