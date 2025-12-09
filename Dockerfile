@@ -7,8 +7,9 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Install dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci
+COPY package.json ./
+COPY package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -55,8 +56,10 @@ EXPOSE 3000
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
-# Start script
-COPY docker-entrypoint.sh /app/
+# Copy and prepare entrypoint
+COPY --chown=nextjs:nodejs docker-entrypoint.sh /app/docker-entrypoint.sh
+USER root
 RUN chmod +x /app/docker-entrypoint.sh
+USER nextjs
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
