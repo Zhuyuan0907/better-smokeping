@@ -62,7 +62,7 @@ export default function TargetSidebar({
                 {group}
               </h3>
               <div className="space-y-1">
-                {groupTargets.map((target) => (
+                {(groupTargets as any[]).map((target: any) => (
                   <button
                     key={target.id}
                     onClick={() => onSelectTarget(target)}
