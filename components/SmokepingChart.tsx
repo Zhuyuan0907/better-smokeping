@@ -76,14 +76,14 @@ export default function SmokepingChart({
         const validJitters = formatted.filter((d: PingData) => d.jitter !== null)
 
         setStats({
-          avgRtt: validRtts.reduce((sum, d) => sum + (d.avgRtt || 0), 0) / validRtts.length,
+          avgRtt: validRtts.reduce((sum: number, d) => sum + (d.avgRtt || 0), 0) / validRtts.length,
           minRtt: Math.min(...validRtts.map((d) => d.minRtt || Infinity)),
           maxRtt: Math.max(...validRtts.map((d) => d.maxRtt || 0)),
           avgLoss:
-            formatted.reduce((sum, d) => sum + d.packetLoss, 0) / formatted.length,
+            formatted.reduce((sum: number, d) => sum + d.packetLoss, 0) / formatted.length,
           avgJitter:
             validJitters.length > 0
-              ? validJitters.reduce((sum, d) => sum + (d.jitter || 0), 0) / validJitters.length
+              ? validJitters.reduce((sum: number, d) => sum + (d.jitter || 0), 0) / validJitters.length
               : 0,
         })
       }
