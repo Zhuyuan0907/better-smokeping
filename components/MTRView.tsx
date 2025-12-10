@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { RefreshCw, Network, AlertCircle } from 'lucide-react'
 import { format } from 'date-fns'
-import { zhTW } from 'date-fns/locale'
 
 interface Hop {
   hop: number
@@ -124,7 +123,7 @@ export default function MTRView({ targetId, targetName, targetHost }: MTRViewPro
             <div className="flex items-center justify-between text-sm text-muted-foreground pb-2 border-b">
               <span>
                 執行時間:{' '}
-                {format(new Date(mtrData.timestamp), 'yyyy/MM/dd HH:mm:ss', { locale: zhTW })}
+                {format(new Date(mtrData.timestamp), 'yyyy/MM/dd HH:mm:ss')}
               </span>
               <span>
                 目的地{mtrData.destinationReached ? '已' : '未'}到達 • 共 {mtrData.totalHops} 跳

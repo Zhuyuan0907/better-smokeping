@@ -16,7 +16,6 @@ import {
   ReferenceLine,
 } from 'recharts'
 import { format } from 'date-fns'
-import { zhTW } from 'date-fns/locale'
 
 interface PingData {
   timestamp: string
@@ -70,7 +69,7 @@ export default function EnhancedLatencyChart({ targetId, hours = 24 }: EnhancedL
       return (
         <div className="bg-white dark:bg-slate-800 p-3 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg">
           <p className="text-sm font-semibold mb-2">
-            {format(new Date(payload[0].payload.timestamp), 'MM/dd HH:mm', { locale: zhTW })}
+            {format(new Date(payload[0].payload.timestamp), 'MM/dd HH:mm')}
           </p>
           {payload.map((entry: any) => (
             <p key={entry.dataKey} className="text-xs" style={{ color: entry.color }}>
