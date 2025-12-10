@@ -3,6 +3,10 @@ set -e
 
 echo "Starting Better Smokeping..."
 
+# Ensure data directory exists and has correct permissions
+mkdir -p /app/data
+touch /app/data/smokeping.db 2>/dev/null || true
+
 # Initialize database
 echo "Initializing database..."
 node_modules/.bin/prisma db push --accept-data-loss || echo "Database already initialized"

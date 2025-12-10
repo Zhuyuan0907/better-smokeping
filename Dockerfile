@@ -47,9 +47,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 COPY --from=builder --chown=nextjs:nodejs /app/config ./config
 
-# Create data directory
-RUN mkdir -p /app/prisma && chown nextjs:nodejs /app/prisma
-RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
+# Create data directory with proper permissions
+RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data && chmod -R 755 /app/data
 
 USER nextjs
 
