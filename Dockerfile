@@ -35,8 +35,8 @@ ENV NEXT_TELEMETRY_DISABLED 1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Install required packages including OpenSSL 3
-RUN apk add --no-cache iputils traceroute openssl
+# Install required packages including OpenSSL 3, mtr for route tracing
+RUN apk add --no-cache iputils traceroute openssl mtr
 
 # Copy necessary files
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
