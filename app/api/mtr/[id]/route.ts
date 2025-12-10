@@ -6,28 +6,31 @@ import { promisify } from 'util'
 const execAsync = promisify(exec)
 const prisma = new PrismaClient()
 
-// GET: 獲取最新的 MTR 結果
+// GET: 獲取 MTR 歷史記錄
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const targetId = parseInt(params.id)
+    const { searchParams } = new URL(request.url)
+    const limit = parseInt(searchParams.get('limit') || '50')
 
-    const result = await prisma.tracerouteResult.findFirst({
+    const results = await prisma.tracerouteResult.findMany({
       where: { targetId },
       orderBy: { timestamp: 'desc' },
+      take: limit,
     })
 
-    if (!result) {
-      return NextResponse.json({ result: null })
+    if (results.length === 0) {
+      return NextResponse.json({ results: [] })
     }
 
     return NextResponse.json({
-      result: {
-        id: result.id,
-        timestamp: result.timestamp,
-        hops: JSON.parse(result.hops),
-        destinationReached: result.destinationReached,
-        totalHops: result.totalHops,
-      },
+      results: results.map((r) => ({
+        id: r.id,
+        timestamp: r.timestamp,
+        hops: JSON.parse(r.hops),
+        destinationReached: r.destinationReached,
+        totalHops: r.totalHops,
+      })),
     })
   } catch (error: any) {
     console.error('獲取 MTR 結果失敗:', error)

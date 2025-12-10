@@ -17,7 +17,7 @@ node scripts/sync-config.js || echo "Config sync completed"
 
 # Start monitoring service in background
 echo "Starting monitoring service..."
-node scripts/monitor.js &
+node scripts/monitor-with-mtr.js &
 
 # Start Next.js server
 echo "Starting web server on port 3000..."
