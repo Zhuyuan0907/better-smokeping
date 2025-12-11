@@ -67,11 +67,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         hop: index + 1,
         ip: hub.host,
         hostname: hub.host,
+        loss: hub.loss || 0,
+        sent: hub.count || 10,
+        last: hub.last || hub.avg,
         avgRtt: hub.avg,
-        loss: hub.loss,
-        rtt1: hub.avg, // MTR JSON 格式不提供個別 RTT
-        rtt2: hub.avg,
-        rtt3: hub.avg,
+        minRtt: hub.best || hub.avg,
+        maxRtt: hub.wrst || hub.avg,
+        stdDev: hub.stdev || 0,
       }))
 
       // 保存到數據庫

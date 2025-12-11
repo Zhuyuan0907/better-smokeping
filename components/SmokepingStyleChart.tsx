@@ -68,12 +68,12 @@ export default function SmokepingStyleChart({
   // 當目標改變時，重置所有狀態
   useEffect(() => {
     setTargetsData([])
-    setLoading(true)
     setHoveredIndex(null)
     setIsDragging(false)
     setDragStart(null)
     setDragEnd(null)
     setZoomRange(null)
+    // 立即觸發數據獲取，loading 會在 fetchAllData 中設置
   }, [targets])
 
   useEffect(() => {
@@ -89,12 +89,12 @@ export default function SmokepingStyleChart({
   }, [targetsData, hoveredIndex, selectedTimestamp, dragStart, dragEnd, zoomRange])
 
   const fetchAllData = async () => {
-    try {
-      // 只在初次載入時顯示 loading
-      if (targetsData.length === 0) {
-        setLoading(true)
-      }
+    // 只在初次載入時顯示 loading
+    if (targetsData.length === 0) {
+      setLoading(true)
+    }
 
+    try {
       const results = await Promise.all(
         targets.map(async (target) => {
           // 根據時間範圍調整 limit，確保能獲取足夠的數據
@@ -141,10 +141,9 @@ export default function SmokepingStyleChart({
           }
         }
       }
-
-      setLoading(false)
     } catch (error) {
       console.error('獲取數據失敗:', error)
+    } finally {
       setLoading(false)
     }
   }
