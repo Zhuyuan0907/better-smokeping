@@ -112,6 +112,7 @@ async function runMTR(target) {
       const mtrData = JSON.parse(stdout)
 
       // 對每個跳進行 DNS 反查並整理完整統計數據
+      // 注意：MTR JSON 輸出使用大寫欄位名稱: Loss%, Snt, Last, Avg, Best, Wrst, StDev
       const hops = await Promise.all(
         mtrData.report.hubs.map(async (hub, index) => {
           const ip = hub.host
@@ -121,13 +122,13 @@ async function runMTR(target) {
             hop: index + 1,
             ip: ip,
             hostname: hostname,
-            loss: hub.loss || 0,
-            sent: hub.count || MTR_COUNT,
-            last: hub.last || hub.avg,
-            avgRtt: hub.avg,
-            minRtt: hub.best || hub.avg,
-            maxRtt: hub.wrst || hub.avg,
-            stdDev: hub.stdev || 0,
+            loss: hub['Loss%'] || 0,
+            sent: hub.Snt || hub.count || MTR_COUNT,
+            last: hub.Last || hub.Avg || 0,
+            avgRtt: hub.Avg || 0,
+            minRtt: hub.Best || hub.Avg || 0,
+            maxRtt: hub.Wrst || hub.Avg || 0,
+            stdDev: hub.StDev || 0,
           }
         })
       )

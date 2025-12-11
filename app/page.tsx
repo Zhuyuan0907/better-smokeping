@@ -106,64 +106,56 @@ export default function HomePage() {
             onTargetClick={handleSelectTarget}
           />
         ) : currentTargets.length > 0 ? (
-          <div className="p-6 space-y-6 max-w-[1800px] mx-auto">
-            {/* 頂部標題 - 簡化 */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="p-4 space-y-3">
+            {/* 頂部標題 */}
+            <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   {selectedTarget?.name}
+                  <span className="ml-2 text-xs font-normal text-slate-500">{selectedTarget?.host}</span>
                 </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  {`${selectedTarget?.host}${selectedTarget?.description ? ` • ${selectedTarget.description}` : ''}`}
-                </p>
               </div>
               <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger className="w-[140px] h-8 text-xs border-slate-200 dark:border-slate-800">
+                <SelectTrigger className="w-[100px] h-7 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">1 小時</SelectItem>
-                  <SelectItem value="6">6 小時</SelectItem>
-                  <SelectItem value="24">24 小時</SelectItem>
-                  <SelectItem value="168">7 天</SelectItem>
-                  <SelectItem value="720">30 天</SelectItem>
+                  <SelectItem value="1">1h</SelectItem>
+                  <SelectItem value="6">6h</SelectItem>
+                  <SelectItem value="24">24h</SelectItem>
+                  <SelectItem value="168">7d</SelectItem>
+                  <SelectItem value="720">30d</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* 圖表 - Smokeping 風格 */}
-            <div>
-              <SmokepingStyleChart
-                targets={currentTargets}
-                hours={parseInt(timeRange)}
-                selectedTimestamp={selectedTimestamp}
-                onTimeSelect={setSelectedTimestamp}
-                onDataLoad={setPingData}
-                onZoomChange={setZoomTimeRange}
-              />
-            </div>
+            {/* 圖表 */}
+            <SmokepingStyleChart
+              targets={currentTargets}
+              hours={parseInt(timeRange)}
+              selectedTimestamp={selectedTimestamp}
+              onTimeSelect={setSelectedTimestamp}
+              onDataLoad={setPingData}
+              onZoomChange={setZoomTimeRange}
+            />
 
-            {/* 互動式時間軸 - 放在圖表與 MTR 之間 */}
-            <div className="mt-4">
-              <InteractiveTimeline
-                data={pingData}
-                selectedTimestamp={selectedTimestamp}
-                onTimeSelect={setSelectedTimestamp}
-                timeRange={zoomTimeRange}
-                fullTimeRange={parseInt(timeRange)}
-              />
-            </div>
+            {/* 時間軸 */}
+            <InteractiveTimeline
+              data={pingData}
+              selectedTimestamp={selectedTimestamp}
+              onTimeSelect={setSelectedTimestamp}
+              timeRange={zoomTimeRange}
+              fullTimeRange={parseInt(timeRange)}
+            />
 
-            {/* MTR - 簡化樣式 (僅單一目標時顯示) */}
+            {/* MTR */}
             {!selectedGroup && selectedTarget && (
-              <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
-                <SimpleMTRView
-                  targetId={selectedTarget.id}
-                  targetHost={selectedTarget.host}
-                  selectedTimestamp={selectedTimestamp}
-                  timeRange={zoomTimeRange}
-                />
-              </div>
+              <SimpleMTRView
+                targetId={selectedTarget.id}
+                targetHost={selectedTarget.host}
+                selectedTimestamp={selectedTimestamp}
+                timeRange={zoomTimeRange}
+              />
             )}
           </div>
         ) : (

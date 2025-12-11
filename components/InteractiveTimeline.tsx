@@ -80,7 +80,7 @@ export default function InteractiveTimeline({
       return
     }
 
-    // 計算異常點
+    // 計算異常點 - 使用改進的 IQR + 相對變化算法
     const avgRtts = displayData.filter(d => d.avgRtt !== null).map(d => d.avgRtt!)
     if (avgRtts.length === 0) {
       // 所有數據都是 null，創建基本點
@@ -95,19 +95,85 @@ export default function InteractiveTimeline({
       return
     }
 
-    const meanRtt = avgRtts.reduce((a: number, b: number) => a + b, 0) / avgRtts.length
-    const stdDev = Math.sqrt(
-      avgRtts.map(x => Math.pow(x - meanRtt, 2)).reduce((a: number, b: number) => a + b, 0) / avgRtts.length
-    )
-    const spikeThreshold = meanRtt + stdDev * 2 // 2 標準差以上視為異常
+    // 使用 IQR 方法計算異常閾值
+    const sortedRtts = [...avgRtts].sort((a, b) => a - b)
+    const q1Index = Math.floor(sortedRtts.length * 0.25)
+    const q3Index = Math.floor(sortedRtts.length * 0.75)
+    const q1 = sortedRtts[q1Index]
+    const q3 = sortedRtts[q3Index]
+    const iqr = q3 - q1
 
-    const points = displayData.map(d => ({
-      timestamp: d.timestamp,
-      hasAnomaly: d.packetLoss > 0 || (d.avgRtt !== null && d.avgRtt > spikeThreshold),
-      packetLoss: d.packetLoss,
-      rttSpike: d.avgRtt !== null && d.avgRtt > spikeThreshold,
-      avgRtt: d.avgRtt,
-    }))
+    // 計算中位數作為基線
+    const medianIndex = Math.floor(sortedRtts.length * 0.5)
+    const median = sortedRtts[medianIndex]
+
+    // 異常閾值：使用 IQR 方法，但也考慮相對變化
+    // 1. IQR 上限：Q3 + 1.5 * IQR
+    // 2. 相對變化：超過中位數的 50% 以上
+    // 3. 絕對最小閾值：至少比中位數高 5ms
+    const iqrUpperBound = q3 + 1.5 * iqr
+    const relativeThreshold = median * 1.5 // 超過中位數 50%
+    const absoluteMinThreshold = median + 5 // 至少高 5ms
+
+    // 取這三個閾值中最合理的
+    const spikeThreshold = Math.max(
+      Math.min(iqrUpperBound, relativeThreshold), // 取 IQR 和相對變化的較小值
+      absoluteMinThreshold // 但至少要高於絕對最小閾值
+    )
+
+    // 計算移動平均，用於檢測短期突增
+    const windowSize = Math.min(5, Math.floor(displayData.length / 10) || 1)
+
+    const points = displayData.map((d, index) => {
+      // 檢查掉包
+      if (d.packetLoss > 0) {
+        return {
+          timestamp: d.timestamp,
+          hasAnomaly: true,
+          packetLoss: d.packetLoss,
+          rttSpike: false,
+          avgRtt: d.avgRtt,
+        }
+      }
+
+      if (d.avgRtt === null) {
+        return {
+          timestamp: d.timestamp,
+          hasAnomaly: false,
+          packetLoss: d.packetLoss,
+          rttSpike: false,
+          avgRtt: d.avgRtt,
+        }
+      }
+
+      // 檢查是否超過全局閾值
+      const exceedsGlobalThreshold = d.avgRtt > spikeThreshold
+
+      // 檢查是否相對於近期平均有突增（短期突增檢測）
+      let exceedsLocalThreshold = false
+      if (index >= windowSize) {
+        const recentRtts = displayData
+          .slice(index - windowSize, index)
+          .filter(x => x.avgRtt !== null)
+          .map(x => x.avgRtt!)
+
+        if (recentRtts.length > 0) {
+          const localAvg = recentRtts.reduce((a, b) => a + b, 0) / recentRtts.length
+          // 比近期平均高 100% 或高 10ms 以上視為短期突增
+          exceedsLocalThreshold = d.avgRtt > localAvg * 2 || d.avgRtt > localAvg + 10
+        }
+      }
+
+      const isSpike = exceedsGlobalThreshold || exceedsLocalThreshold
+
+      return {
+        timestamp: d.timestamp,
+        hasAnomaly: isSpike,
+        packetLoss: d.packetLoss,
+        rttSpike: isSpike,
+        avgRtt: d.avgRtt,
+      }
+    })
 
     setTimelinePoints(points)
   }, [data, timeRange, fullTimeRange])

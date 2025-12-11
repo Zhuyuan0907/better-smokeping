@@ -62,25 +62,52 @@ export default function SmokepingStyleChart({
   const [dragStart, setDragStart] = useState<number | null>(null)
   const [dragEnd, setDragEnd] = useState<number | null>(null)
   const [zoomRange, setZoomRange] = useState<{ start: number; end: number } | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const fetchIdRef = useRef<number>(0) // 用於追蹤最新的請求
 
   const isSingleTarget = targets.length === 1
 
-  // 當目標改變時，重置所有狀態
+  // 使用 targets 的 ID 列表作為穩定的依賴key
+  const targetsKey = targets.map(t => t.id).join(',')
+
+  // 當目標或時間範圍改變時，重置狀態並重新獲取數據
   useEffect(() => {
+    // 如果沒有目標，直接設置空數據
+    if (targets.length === 0) {
+      setTargetsData([])
+      setLoading(false)
+      return
+    }
+
+    // 取消之前的請求
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+
+    // 重置狀態
     setTargetsData([])
     setHoveredIndex(null)
     setIsDragging(false)
     setDragStart(null)
     setDragEnd(null)
     setZoomRange(null)
-    // 立即觸發數據獲取，loading 會在 fetchAllData 中設置
-  }, [targets])
+    setLoading(true)
 
-  useEffect(() => {
+    // 立即獲取數據
     fetchAllData()
+
+    // 設置定時刷新
     const interval = setInterval(fetchAllData, 60000)
-    return () => clearInterval(interval)
-  }, [targets, hours])
+
+    // 清理函數
+    return () => {
+      clearInterval(interval)
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [targetsKey, hours])
 
   useEffect(() => {
     if (targetsData.length > 0 && canvasRef.current) {
@@ -88,30 +115,60 @@ export default function SmokepingStyleChart({
     }
   }, [targetsData, hoveredIndex, selectedTimestamp, dragStart, dragEnd, zoomRange])
 
+  // 監聯 window level 的 mouseup 事件，確保拖拉在 canvas 外釋放也能正確處理
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDragging) {
+        finishDrag()
+      }
+    }
+
+    window.addEventListener('mouseup', handleGlobalMouseUp)
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp)
+  }, [isDragging, dragStart, dragEnd])
+
   const fetchAllData = async () => {
     // 如果沒有目標，直接返回
     if (targets.length === 0) {
-      setTargetsData([])
-      setLoading(false)
       return
     }
 
-    // 只在初次載入時顯示 loading
-    if (targetsData.length === 0) {
-      setLoading(true)
-    }
+    // 創建新的 AbortController
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    // 遞增 fetchId，用於識別最新的請求
+    const currentFetchId = ++fetchIdRef.current
 
     try {
+      // 根據時間範圍計算合適的 limit
+      const getOptimalLimit = (hours: number) => {
+        if (hours <= 1) return 100
+        if (hours <= 6) return 400
+        if (hours <= 24) return 1500
+        if (hours <= 168) return 3000
+        return 5000
+      }
+
+      const limit = getOptimalLimit(hours)
+
       const results = await Promise.all(
         targets.map(async (target) => {
-          // 根據時間範圍調整 limit，確保能獲取足夠的數據
-          // 每分鐘一筆數據：1小時=60, 24小時=1440, 7天=10080, 30天=43200
-          const limit = hours <= 24 ? 2000 : hours <= 168 ? 15000 : 50000
-          const res = await fetch(`/api/ping/${target.id}?hours=${hours}&limit=${limit}`)
+          const res = await fetch(
+            `/api/ping/${target.id}?hours=${hours}&limit=${limit}`,
+            { signal: controller.signal }
+          )
           const result = await res.json()
 
           if (result.results && result.results.length > 0) {
-            const formatted = result.results.reverse().map((item: any) => ({
+            let data = result.results
+            const maxPoints = 2000
+            if (data.length > maxPoints) {
+              const step = Math.ceil(data.length / maxPoints)
+              data = data.filter((_: any, i: number) => i % step === 0)
+            }
+
+            const formatted = data.reverse().map((item: any) => ({
               timestamp: item.timestamp,
               avgRtt: item.avgRtt,
               minRtt: item.minRtt,
@@ -133,25 +190,36 @@ export default function SmokepingStyleChart({
         })
       )
 
+      // 檢查這個請求是否仍然是最新的
+      if (currentFetchId !== fetchIdRef.current) {
+        // 這是一個過時的請求，忽略結果
+        return
+      }
+
       setTargetsData(results)
 
       // 通知父組件數據已載入
       if (onDataLoad) {
         if (isSingleTarget && results[0]?.data) {
-          // 單一目標：使用該目標的數據
           onDataLoad(results[0].data)
         } else if (results.length > 0) {
-          // 多目標：使用第一個有數據的目標的數據作為時間軸參考
           const firstWithData = results.find(r => r.data.length > 0)
           if (firstWithData) {
             onDataLoad(firstWithData.data)
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
+      // 忽略被取消的請求錯誤
+      if (error.name === 'AbortError') {
+        return
+      }
       console.error('獲取數據失敗:', error)
     } finally {
-      setLoading(false)
+      // 只有當這是最新的請求時才設置 loading 為 false
+      if (currentFetchId === fetchIdRef.current) {
+        setLoading(false)
+      }
     }
   }
 
@@ -376,20 +444,33 @@ export default function SmokepingStyleChart({
       ctx.fillText(value.toFixed(0) + ' ms', padding.left - 10, y + 4)
     }
 
-    // X 軸標籤（時間） - 使用第一個有數據的目標的時間軸
+    // X 軸標籤（時間） - 基於選定的時間範圍，而非數據範圍
+    ctx.textAlign = 'center'
+    const timeLabels = 6
+    // 根據時間範圍選擇合適的時間格式
+    const timeFormat = hours <= 24 ? 'HH:mm' : hours <= 168 ? 'MM/dd HH:mm' : 'MM/dd'
+
+    // 計算時間範圍的起始和結束時間
+    const endTime = Date.now()
+    const startTime = endTime - (hours * 60 * 60 * 1000)
+
+    // 如果有縮放，使用縮放範圍
     const referenceData = displayTargetsData.find(td => td.data.length > 0)?.data || []
-    if (referenceData.length > 0) {
-      ctx.textAlign = 'center'
-      const timeLabels = 6
-      // 根據時間範圍選擇合適的時間格式
-      const timeFormat = hours <= 24 ? 'HH:mm' : hours <= 168 ? 'MM/dd HH:mm' : 'MM/dd'
-      for (let i = 0; i < timeLabels; i++) {
-        const index = Math.floor((referenceData.length / (timeLabels - 1)) * i)
-        if (index >= referenceData.length) continue
-        const x = padding.left + (chartWidth / (referenceData.length - 1)) * index
-        const time = format(new Date(referenceData[index].timestamp), timeFormat)
-        ctx.fillText(time, x, height - 10)
-      }
+    let displayStartTime = startTime
+    let displayEndTime = endTime
+
+    if (zoomRange && referenceData.length > 0) {
+      // 縮放模式：使用數據的時間範圍
+      displayStartTime = new Date(referenceData[0].timestamp).getTime()
+      displayEndTime = new Date(referenceData[referenceData.length - 1].timestamp).getTime()
+    }
+
+    for (let i = 0; i < timeLabels; i++) {
+      const ratio = i / (timeLabels - 1)
+      const timestamp = displayStartTime + (displayEndTime - displayStartTime) * ratio
+      const x = padding.left + chartWidth * ratio
+      const time = format(new Date(timestamp), timeFormat)
+      ctx.fillText(time, x, height - 10)
     }
 
     // 繪製多目標圖例
@@ -577,8 +658,8 @@ export default function SmokepingStyleChart({
     }
   }
 
-  const handleMouseUp = () => {
-    if (isDragging && dragStart !== null && dragEnd !== null) {
+  const finishDrag = () => {
+    if (dragStart !== null && dragEnd !== null) {
       // 拖拉結束，設定縮放範圍
       const start = Math.min(dragStart, dragEnd)
       const end = Math.max(dragStart, dragEnd)
@@ -597,10 +678,16 @@ export default function SmokepingStyleChart({
           })
         }
       }
+    }
 
-      setIsDragging(false)
-      setDragStart(null)
-      setDragEnd(null)
+    setIsDragging(false)
+    setDragStart(null)
+    setDragEnd(null)
+  }
+
+  const handleMouseUp = () => {
+    if (isDragging) {
+      finishDrag()
     }
   }
 

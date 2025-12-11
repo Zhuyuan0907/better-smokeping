@@ -63,17 +63,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
 
       const mtrData = JSON.parse(stdout)
+      // 注意：MTR JSON 輸出使用大寫欄位名稱: Loss%, Snt, Last, Avg, Best, Wrst, StDev
       const hops = mtrData.report.hubs.map((hub: any, index: number) => ({
         hop: index + 1,
         ip: hub.host,
         hostname: hub.host,
-        loss: hub.loss || 0,
-        sent: hub.count || 10,
-        last: hub.last || hub.avg,
-        avgRtt: hub.avg,
-        minRtt: hub.best || hub.avg,
-        maxRtt: hub.wrst || hub.avg,
-        stdDev: hub.stdev || 0,
+        loss: hub['Loss%'] || 0,
+        sent: hub.Snt || hub.count || 10,
+        last: hub.Last || hub.Avg || 0,
+        avgRtt: hub.Avg || 0,
+        minRtt: hub.Best || hub.Avg || 0,
+        maxRtt: hub.Wrst || hub.Avg || 0,
+        stdDev: hub.StDev || 0,
       }))
 
       // 保存到數據庫

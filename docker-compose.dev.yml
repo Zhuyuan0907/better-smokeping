@@ -23,6 +23,12 @@ services:
       - ./config:/app/config
       - ./prisma:/app/prisma
       - ./public:/app/public
+      # Mount config files
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./next.config.js:/app/next.config.js
+      - ./tailwind.config.ts:/app/tailwind.config.ts
+      - ./postcss.config.js:/app/postcss.config.js
+      - ./package.json:/app/package.json
       # Data persistence
       - ./data:/app/data
       # Prevent overwriting node_modules
