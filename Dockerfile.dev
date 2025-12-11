@@ -1,0 +1,38 @@
+FROM node:20-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    libc6-compat \
+    openssl \
+    iputils \
+    traceroute \
+    mtr \
+    bash
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy prisma schema
+COPY prisma ./prisma
+
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Copy entrypoint
+COPY docker-entrypoint.sh ./
+RUN chmod +x ./docker-entrypoint.sh
+
+# Create data directory
+RUN mkdir -p /app/data && chmod 777 /app/data
+
+EXPOSE 3000
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

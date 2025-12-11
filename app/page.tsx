@@ -6,11 +6,15 @@ import { Activity } from 'lucide-react'
 import CompactSidebar from '@/components/CompactSidebar'
 import SmokepingStyleChart, { InteractiveTimeline } from '@/components/SmokepingStyleChart'
 import SimpleMTRView from '@/components/SimpleMTRView'
+import GroupOverview from '@/components/GroupOverview'
+
+type ViewMode = 'group-overview' | 'target-detail' | 'multi-target'
 
 export default function HomePage() {
   const [targets, setTargets] = useState<any[]>([])
   const [selectedTarget, setSelectedTarget] = useState<any>(null)
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>('group-overview')
   const [timeRange, setTimeRange] = useState<string>('24')
   const [loading, setLoading] = useState(true)
   const [selectedTimestamp, setSelectedTimestamp] = useState<string | undefined>()
@@ -57,6 +61,7 @@ export default function HomePage() {
   const handleSelectTarget = (target: any) => {
     setSelectedTarget(target)
     setSelectedGroup(null)
+    setViewMode('target-detail')
     // 重置狀態，避免顯示舊數據
     setSelectedTimestamp(undefined)
     setZoomTimeRange(null)
@@ -66,6 +71,7 @@ export default function HomePage() {
   const handleSelectGroup = (group: string) => {
     setSelectedGroup(group)
     setSelectedTarget(null)
+    setViewMode('group-overview')
     // 重置狀態，避免顯示舊數據
     setSelectedTimestamp(undefined)
     setZoomTimeRange(null)
@@ -92,19 +98,23 @@ export default function HomePage() {
 
       {/* 主內容 */}
       <div className="flex-1 overflow-auto">
-        {currentTargets.length > 0 ? (
+        {viewMode === 'group-overview' && selectedGroup ? (
+          <GroupOverview
+            group={selectedGroup}
+            targets={currentTargets}
+            hours={parseInt(timeRange)}
+            onTargetClick={handleSelectTarget}
+          />
+        ) : currentTargets.length > 0 ? (
           <div className="p-6 space-y-6 max-w-[1800px] mx-auto">
             {/* 頂部標題 - 簡化 */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
               <div>
                 <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                  {selectedGroup ? `${selectedGroup} (${currentTargets.length} 個目標)` : selectedTarget?.name}
+                  {selectedTarget?.name}
                 </h1>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  {selectedGroup
-                    ? currentTargets.map(t => t.name).join(', ')
-                    : `${selectedTarget?.host}${selectedTarget?.description ? ` • ${selectedTarget.description}` : ''}`
-                  }
+                  {`${selectedTarget?.host}${selectedTarget?.description ? ` • ${selectedTarget.description}` : ''}`}
                 </p>
               </div>
               <Select value={timeRange} onValueChange={setTimeRange}>
