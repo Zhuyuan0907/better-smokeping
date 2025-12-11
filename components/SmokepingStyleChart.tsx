@@ -79,7 +79,11 @@ export default function SmokepingStyleChart({
 
   const fetchAllData = async () => {
     try {
-      setLoading(true)
+      // 只在初次載入時顯示 loading
+      if (targetsData.length === 0) {
+        setLoading(true)
+      }
+
       const results = await Promise.all(
         targets.map(async (target) => {
           const res = await fetch(`/api/ping/${target.id}?hours=${hours}`)
@@ -110,13 +114,23 @@ export default function SmokepingStyleChart({
 
       setTargetsData(results)
 
-      // 如果是單一目標，通知父組件數據已載入
-      if (isSingleTarget && results[0]?.data && onDataLoad) {
-        onDataLoad(results[0].data)
+      // 通知父組件數據已載入
+      if (onDataLoad) {
+        if (isSingleTarget && results[0]?.data) {
+          // 單一目標：使用該目標的數據
+          onDataLoad(results[0].data)
+        } else if (results.length > 0) {
+          // 多目標：使用第一個有數據的目標的數據作為時間軸參考
+          const firstWithData = results.find(r => r.data.length > 0)
+          if (firstWithData) {
+            onDataLoad(firstWithData.data)
+          }
+        }
       }
+
+      setLoading(false)
     } catch (error) {
       console.error('獲取數據失敗:', error)
-    } finally {
       setLoading(false)
     }
   }

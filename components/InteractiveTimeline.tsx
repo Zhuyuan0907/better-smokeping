@@ -116,7 +116,8 @@ export default function InteractiveTimeline({
     if (canvasRef.current) {
       drawTimeline()
     }
-  }, [timelinePoints, selectedTimestamp, hoveredIndex, data, timeRange, fullTimeRange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timelinePoints, selectedTimestamp, hoveredIndex])
 
   const drawTimeline = () => {
     const canvas = canvasRef.current
