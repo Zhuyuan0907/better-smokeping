@@ -19,13 +19,17 @@ interface Target {
 interface CompactSidebarProps {
   targets: Target[]
   selectedTarget: Target | null
+  selectedGroup: string | null
   onSelectTarget: (target: Target) => void
+  onSelectGroup: (group: string) => void
 }
 
 export default function CompactSidebar({
   targets,
   selectedTarget,
+  selectedGroup,
   onSelectTarget,
+  onSelectGroup,
 }: CompactSidebarProps) {
   const { theme, setTheme } = useTheme()
   const [searchTerm, setSearchTerm] = useState('')
@@ -97,22 +101,32 @@ export default function CompactSidebar({
           return (
             <div key={group}>
               {/* 分組標題 */}
-              <button
-                onClick={() => toggleGroup(group)}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors text-xs font-medium"
-              >
-                <div className="flex items-center gap-1.5">
+              <div className="flex items-center">
+                <button
+                  onClick={() => toggleGroup(group)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors"
+                >
                   {isCollapsed ? (
                     <ChevronRight className="h-3 w-3 text-muted-foreground" />
                   ) : (
                     <ChevronDown className="h-3 w-3 text-muted-foreground" />
                   )}
+                </button>
+                <button
+                  onClick={() => onSelectGroup(group)}
+                  className={cn(
+                    "flex-1 flex items-center justify-between py-1.5 pr-3 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors text-xs font-medium",
+                    selectedGroup === group && !selectedTarget
+                      ? 'bg-primary text-primary-foreground'
+                      : ''
+                  )}
+                >
                   <span>{group}</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground">
-                  {groupTargets.filter((t) => t.enabled).length}
-                </span>
-              </button>
+                  <span className="text-[10px] opacity-70">
+                    {groupTargets.filter((t) => t.enabled).length}
+                  </span>
+                </button>
+              </div>
 
               {/* 目標 */}
               {!isCollapsed &&

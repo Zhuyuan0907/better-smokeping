@@ -13,9 +13,20 @@ interface PingData {
   jitter: number | null
 }
 
+interface Target {
+  id: number
+  name: string
+  host: string
+  group?: string
+}
+
+interface TargetData {
+  target: Target
+  data: PingData[]
+}
+
 interface SmokepingStyleChartProps {
-  targetId: number
-  targetName: string
+  targets: Target[]
   hours?: number
   selectedTimestamp?: string
   onTimeSelect?: (timestamp: string) => void
@@ -23,16 +34,27 @@ interface SmokepingStyleChartProps {
   onZoomChange?: (timeRange: { start: string; end: string } | null) => void
 }
 
+// 為不同目標生成不同顏色
+const TARGET_COLORS = [
+  '#3b82f6', // 藍色
+  '#ef4444', // 紅色
+  '#10b981', // 綠色
+  '#f59e0b', // 橘色
+  '#8b5cf6', // 紫色
+  '#ec4899', // 粉色
+  '#06b6d4', // 青色
+  '#f97316', // 橘紅色
+]
+
 export default function SmokepingStyleChart({
-  targetId,
-  targetName,
+  targets,
   hours = 24,
   selectedTimestamp,
   onTimeSelect,
   onDataLoad,
   onZoomChange,
 }: SmokepingStyleChartProps) {
-  const [data, setData] = useState<PingData[]>([])
+  const [targetsData, setTargetsData] = useState<TargetData[]>([])
   const [loading, setLoading] = useState(true)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
@@ -40,66 +62,57 @@ export default function SmokepingStyleChart({
   const [dragStart, setDragStart] = useState<number | null>(null)
   const [dragEnd, setDragEnd] = useState<number | null>(null)
   const [zoomRange, setZoomRange] = useState<{ start: number; end: number } | null>(null)
-  const [stats, setStats] = useState({
-    median: 0,
-    avg: 0,
-    max: 0,
-    min: 0,
-    now: 0,
-    sd: 0,
-    avgLoss: 0,
-    maxLoss: 0,
-  })
+
+  const isSingleTarget = targets.length === 1
 
   useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 60000)
+    fetchAllData()
+    const interval = setInterval(fetchAllData, 60000)
     return () => clearInterval(interval)
-  }, [targetId, hours])
+  }, [targets, hours])
 
   useEffect(() => {
-    if (data.length > 0 && canvasRef.current) {
+    if (targetsData.length > 0 && canvasRef.current) {
       drawChart()
     }
-  }, [data, hoveredIndex, selectedTimestamp, dragStart, dragEnd, zoomRange])
+  }, [targetsData, hoveredIndex, selectedTimestamp, dragStart, dragEnd, zoomRange])
 
-  const fetchData = async () => {
+  const fetchAllData = async () => {
     try {
-      const res = await fetch(`/api/ping/${targetId}?hours=${hours}`)
-      const result = await res.json()
+      setLoading(true)
+      const results = await Promise.all(
+        targets.map(async (target) => {
+          const res = await fetch(`/api/ping/${target.id}?hours=${hours}`)
+          const result = await res.json()
 
-      if (result.results && result.results.length > 0) {
-        const formatted = result.results.reverse().map((item: any) => ({
-          timestamp: item.timestamp,
-          avgRtt: item.avgRtt,
-          minRtt: item.minRtt,
-          maxRtt: item.maxRtt,
-          packetLoss: item.packetLoss || 0,
-          jitter: item.jitter,
-        }))
+          if (result.results && result.results.length > 0) {
+            const formatted = result.results.reverse().map((item: any) => ({
+              timestamp: item.timestamp,
+              avgRtt: item.avgRtt,
+              minRtt: item.minRtt,
+              maxRtt: item.maxRtt,
+              packetLoss: item.packetLoss || 0,
+              jitter: item.jitter,
+            }))
 
-        setData(formatted)
+            return {
+              target,
+              data: formatted,
+            }
+          }
 
-        // 通知父組件數據已載入
-        if (onDataLoad) {
-          onDataLoad(formatted)
-        }
-
-        // 計算統計
-        const validRtts = formatted.filter((d: PingData) => d.avgRtt !== null)
-        const rtts = validRtts.map((d: PingData) => d.avgRtt || 0)
-        const sorted = [...rtts].sort((a, b) => a - b)
-
-        setStats({
-          median: sorted[Math.floor(sorted.length / 2)] || 0,
-          avg: rtts.reduce((a: number, b: number) => a + b, 0) / rtts.length || 0,
-          max: Math.max(...rtts) || 0,
-          min: Math.min(...rtts) || 0,
-          now: rtts[rtts.length - 1] || 0,
-          sd: calculateStdDev(rtts),
-          avgLoss: formatted.reduce((sum: number, d: PingData) => sum + d.packetLoss, 0) / formatted.length,
-          maxLoss: Math.max(...formatted.map((d: PingData) => d.packetLoss)),
+          return {
+            target,
+            data: [],
+          }
         })
+      )
+
+      setTargetsData(results)
+
+      // 如果是單一目標，通知父組件數據已載入
+      if (isSingleTarget && results[0]?.data && onDataLoad) {
+        onDataLoad(results[0].data)
       }
     } catch (error) {
       console.error('獲取數據失敗:', error)
@@ -125,9 +138,79 @@ export default function SmokepingStyleChart({
     return '#7f1d1d' // 深紅 - 30/30
   }
 
+  // 計算統計數據
+  const stats = (() => {
+    if (targetsData.length === 0 || targetsData.every(td => td.data.length === 0)) {
+      return {
+        median: 0,
+        avg: 0,
+        max: 0,
+        min: 0,
+        now: 0,
+        sd: 0,
+        avgLoss: 0,
+        maxLoss: 0,
+      }
+    }
+
+    // 對於單一目標，使用該目標的數據
+    // 對於多目標，使用所有目標的合併數據
+    let allRtts: number[] = []
+    let allLosses: number[] = []
+    let latestRtts: number[] = []
+
+    targetsData.forEach(targetData => {
+      const validRtts = targetData.data
+        .filter(d => d.avgRtt !== null)
+        .map(d => d.avgRtt as number)
+
+      if (validRtts.length > 0) {
+        allRtts.push(...validRtts)
+        latestRtts.push(validRtts[validRtts.length - 1])
+      }
+
+      const losses = targetData.data.map(d => d.packetLoss)
+      allLosses.push(...losses)
+    })
+
+    if (allRtts.length === 0) {
+      return {
+        median: 0,
+        avg: 0,
+        max: 0,
+        min: 0,
+        now: 0,
+        sd: 0,
+        avgLoss: 0,
+        maxLoss: 0,
+      }
+    }
+
+    const sortedRtts = [...allRtts].sort((a, b) => a - b)
+    const median = sortedRtts[Math.floor(sortedRtts.length / 2)]
+    const avg = allRtts.reduce((a, b) => a + b, 0) / allRtts.length
+    const max = Math.max(...allRtts)
+    const min = Math.min(...allRtts)
+    const now = latestRtts.length > 0 ? latestRtts[latestRtts.length - 1] : 0
+    const sd = calculateStdDev(allRtts)
+    const avgLoss = allLosses.reduce((a, b) => a + b, 0) / allLosses.length
+    const maxLoss = Math.max(...allLosses)
+
+    return {
+      median,
+      avg,
+      max,
+      min,
+      now,
+      sd,
+      avgLoss,
+      maxLoss,
+    }
+  })()
+
   const drawChart = () => {
     const canvas = canvasRef.current
-    if (!canvas || data.length === 0) return
+    if (!canvas || targetsData.length === 0) return
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -141,7 +224,13 @@ export default function SmokepingStyleChart({
 
     const width = rect.width
     const height = rect.height
-    const padding = { top: 20, right: 40, bottom: 40, left: 60 }
+    // Adjust padding for legend when multiple targets
+    const padding = {
+      top: isSingleTarget ? 20 : 60, // More space for legend
+      right: 40,
+      bottom: 40,
+      left: 60
+    }
     const chartWidth = width - padding.left - padding.right
     const chartHeight = height - padding.top - padding.bottom
 
@@ -152,13 +241,26 @@ export default function SmokepingStyleChart({
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, width, height)
 
-    // 根據縮放範圍篩選數據
-    const displayData = zoomRange
-      ? data.slice(zoomRange.start, zoomRange.end + 1)
-      : data
+    // 根據縮放範圍篩選數據 - 對每個目標都要篩選
+    const displayTargetsData = targetsData.map(targetData => ({
+      target: targetData.target,
+      data: zoomRange
+        ? targetData.data.slice(zoomRange.start, zoomRange.end + 1)
+        : targetData.data
+    }))
 
-    // 找出最大值（從顯示的數據中）
-    const maxRtt = Math.max(...displayData.map((d) => d.maxRtt || 0))
+    // 檢查是否有任何數據
+    if (displayTargetsData.every(td => td.data.length === 0)) return
+
+    // 找出所有目標中的最大 RTT 值
+    let maxRtt = 0
+    displayTargetsData.forEach(targetData => {
+      const targetMax = Math.max(...targetData.data.map((d) => d.maxRtt || 0))
+      if (targetMax > maxRtt) {
+        maxRtt = targetMax
+      }
+    })
+
     const yScale = chartHeight / (maxRtt * 1.1)
 
     // 繪製網格
@@ -172,43 +274,62 @@ export default function SmokepingStyleChart({
       ctx.stroke()
     }
 
-    // 繪製數據線條（分段著色）
-    for (let i = 0; i < displayData.length - 1; i++) {
-      const d1 = displayData[i]
-      const d2 = displayData[i + 1]
+    // 繪製每個目標的數據
+    displayTargetsData.forEach((targetData, targetIndex) => {
+      const displayData = targetData.data
+      if (displayData.length === 0) return
 
-      if (d1.avgRtt === null || d2.avgRtt === null) continue
+      // 單一目標：使用掉包率決定顏色
+      // 多目標：使用固定的目標顏色
+      let lineColor: string
+      if (isSingleTarget) {
+        const maxLossInDisplay = Math.max(...displayData.map(d => d.packetLoss))
+        lineColor = getColorForLoss(maxLossInDisplay)
+      } else {
+        lineColor = TARGET_COLORS[targetIndex % TARGET_COLORS.length]
+      }
 
-      const x1 = padding.left + (chartWidth / (displayData.length - 1)) * i
-      const x2 = padding.left + (chartWidth / (displayData.length - 1)) * (i + 1)
-      const y1 = padding.top + chartHeight - d1.avgRtt * yScale
-      const y2 = padding.top + chartHeight - d2.avgRtt * yScale
-
-      // 根據掉包率選擇顏色
-      const color = getColorForLoss(d1.packetLoss)
-
-      ctx.strokeStyle = color
+      // 繪製數據線條
+      ctx.strokeStyle = lineColor
       ctx.lineWidth = 2
       ctx.beginPath()
-      ctx.moveTo(x1, y1)
-      ctx.lineTo(x2, y2)
+
+      let pathStarted = false
+      for (let i = 0; i < displayData.length; i++) {
+        const d = displayData[i]
+        if (d.avgRtt === null) continue
+
+        const x = padding.left + (chartWidth / (displayData.length - 1)) * i
+        const y = padding.top + chartHeight - d.avgRtt * yScale
+
+        if (!pathStarted) {
+          ctx.moveTo(x, y)
+          pathStarted = true
+        } else {
+          ctx.lineTo(x, y)
+        }
+      }
       ctx.stroke()
 
       // 繪製掉包的垂直線（煙霧效果）
-      if (d1.packetLoss > 0 && d1.minRtt !== null && d1.maxRtt !== null) {
-        const yMin = padding.top + chartHeight - d1.minRtt * yScale
-        const yMax = padding.top + chartHeight - d1.maxRtt * yScale
+      for (let i = 0; i < displayData.length; i++) {
+        const d = displayData[i]
+        if (d.packetLoss > 0 && d.minRtt !== null && d.maxRtt !== null) {
+          const x = padding.left + (chartWidth / (displayData.length - 1)) * i
+          const yMin = padding.top + chartHeight - d.minRtt * yScale
+          const yMax = padding.top + chartHeight - d.maxRtt * yScale
 
-        ctx.strokeStyle = color
-        ctx.globalAlpha = 0.3
-        ctx.lineWidth = 2
-        ctx.beginPath()
-        ctx.moveTo(x1, yMin)
-        ctx.lineTo(x1, yMax)
-        ctx.stroke()
-        ctx.globalAlpha = 1
+          ctx.strokeStyle = lineColor
+          ctx.globalAlpha = 0.3
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          ctx.moveTo(x, yMin)
+          ctx.lineTo(x, yMax)
+          ctx.stroke()
+          ctx.globalAlpha = 1
+        }
       }
-    }
+    })
 
     // Y 軸標籤
     ctx.fillStyle = '#6b7280'
@@ -220,22 +341,49 @@ export default function SmokepingStyleChart({
       ctx.fillText(value.toFixed(0) + ' ms', padding.left - 10, y + 4)
     }
 
-    // X 軸標籤（時間）
-    ctx.textAlign = 'center'
-    const timeLabels = 6
-    for (let i = 0; i < timeLabels; i++) {
-      const index = Math.floor((displayData.length / (timeLabels - 1)) * i)
-      if (index >= displayData.length) continue
-      const x = padding.left + (chartWidth / (displayData.length - 1)) * index
-      const time = format(new Date(displayData[index].timestamp), 'HH:mm')
-      ctx.fillText(time, x, height - 10)
+    // X 軸標籤（時間） - 使用第一個有數據的目標的時間軸
+    const referenceData = displayTargetsData.find(td => td.data.length > 0)?.data || []
+    if (referenceData.length > 0) {
+      ctx.textAlign = 'center'
+      const timeLabels = 6
+      for (let i = 0; i < timeLabels; i++) {
+        const index = Math.floor((referenceData.length / (timeLabels - 1)) * i)
+        if (index >= referenceData.length) continue
+        const x = padding.left + (chartWidth / (referenceData.length - 1)) * index
+        const time = format(new Date(referenceData[index].timestamp), 'HH:mm')
+        ctx.fillText(time, x, height - 10)
+      }
+    }
+
+    // 繪製多目標圖例
+    if (!isSingleTarget) {
+      ctx.font = '12px monospace'
+      ctx.textAlign = 'left'
+
+      const legendX = padding.left
+      const legendY = 15
+      const legendSpacing = 120 // 每個圖例項目的寬度
+
+      targetsData.forEach((targetData, index) => {
+        const color = TARGET_COLORS[index % TARGET_COLORS.length]
+        const x = legendX + (index * legendSpacing)
+
+        // 繪製顏色方塊
+        ctx.fillStyle = color
+        ctx.fillRect(x, legendY, 15, 10)
+
+        // 繪製目標名稱
+        ctx.fillStyle = '#1f2937'
+        ctx.fillText(targetData.target.name, x + 20, legendY + 9)
+      })
     }
 
     // 選中的時間點（從時間軸選擇）
-    if (selectedTimestamp && !zoomRange) {
-      const selectedIndex = data.findIndex(d => d.timestamp === selectedTimestamp)
+    if (selectedTimestamp && !zoomRange && targetsData.length > 0) {
+      const firstTargetData = targetsData[0].data
+      const selectedIndex = firstTargetData.findIndex(d => d.timestamp === selectedTimestamp)
       if (selectedIndex !== -1) {
-        const x = padding.left + (chartWidth / (data.length - 1)) * selectedIndex
+        const x = padding.left + (chartWidth / (firstTargetData.length - 1)) * selectedIndex
 
         // 繪製選中的垂直線
         ctx.strokeStyle = '#3b82f6'
@@ -250,69 +398,114 @@ export default function SmokepingStyleChart({
     }
 
     // 懸停提示
-    if (hoveredIndex !== null && displayData[hoveredIndex]) {
-      const d = displayData[hoveredIndex]
-      const x = padding.left + (chartWidth / (displayData.length - 1)) * hoveredIndex
+    if (hoveredIndex !== null) {
+      const referenceData = displayTargetsData.find(td => td.data.length > 0)?.data || []
+      if (referenceData[hoveredIndex]) {
+        const x = padding.left + (chartWidth / (referenceData.length - 1)) * hoveredIndex
 
-      // 繪製垂直線
-      ctx.strokeStyle = '#94a3b8'
-      ctx.lineWidth = 1
-      ctx.setLineDash([5, 5])
-      ctx.beginPath()
-      ctx.moveTo(x, padding.top)
-      ctx.lineTo(x, height - padding.bottom)
-      ctx.stroke()
-      ctx.setLineDash([])
+        // 繪製垂直線
+        ctx.strokeStyle = '#94a3b8'
+        ctx.lineWidth = 1
+        ctx.setLineDash([5, 5])
+        ctx.beginPath()
+        ctx.moveTo(x, padding.top)
+        ctx.lineTo(x, height - padding.bottom)
+        ctx.stroke()
+        ctx.setLineDash([])
 
-      // 提示框
-      if (d.avgRtt !== null) {
-        const y = padding.top + chartHeight - d.avgRtt * yScale
+        // 計算提示框內容和尺寸
+        const timestamp = referenceData[hoveredIndex].timestamp
+        let tooltipLines: string[] = [format(new Date(timestamp), 'HH:mm:ss')]
+
+        // 收集所有目標在此時間點的數據
+        displayTargetsData.forEach((targetData, targetIndex) => {
+          const d = targetData.data[hoveredIndex]
+          if (d && d.avgRtt !== null) {
+            const targetName = targetData.target.name
+            const rttText = `${targetName}: ${d.avgRtt.toFixed(1)} ms`
+            tooltipLines.push(rttText)
+            if (d.packetLoss > 0) {
+              tooltipLines.push(`  Loss: ${d.packetLoss.toFixed(1)}%`)
+            }
+          }
+        })
+
+        // 繪製提示框
+        const lineHeight = 14
+        const tooltipPadding = 5
+        const tooltipWidth = 180
+        const tooltipHeight = tooltipLines.length * lineHeight + tooltipPadding * 2
+
+        // 計算提示框位置（避免超出畫布）
+        let tooltipX = x + 10
+        let tooltipY = padding.top + 10
+
+        if (tooltipX + tooltipWidth > width - padding.right) {
+          tooltipX = x - tooltipWidth - 10
+        }
+
         ctx.fillStyle = '#1f2937'
-        ctx.fillRect(x + 10, y - 40, 150, 35)
+        ctx.fillRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight)
+
         ctx.fillStyle = '#ffffff'
         ctx.font = '11px monospace'
         ctx.textAlign = 'left'
-        ctx.fillText(`${format(new Date(d.timestamp), 'HH:mm:ss')}`, x + 15, y - 25)
-        ctx.fillText(`RTT: ${d.avgRtt.toFixed(1)} ms`, x + 15, y - 12)
-        if (d.packetLoss > 0) {
-          ctx.fillText(`Loss: ${d.packetLoss.toFixed(1)}%`, x + 15, y + 1)
-        }
+
+        tooltipLines.forEach((line, i) => {
+          ctx.fillText(line, tooltipX + tooltipPadding, tooltipY + tooltipPadding + (i + 1) * lineHeight)
+        })
       }
     }
 
     // 繪製拖拉選擇框
-    if (isDragging && dragStart !== null && dragEnd !== null && !zoomRange) {
-      const x1 = padding.left + (chartWidth / (data.length - 1)) * dragStart
-      const x2 = padding.left + (chartWidth / (data.length - 1)) * dragEnd
-      const startX = Math.min(x1, x2)
-      const endX = Math.max(x1, x2)
+    if (isDragging && dragStart !== null && dragEnd !== null) {
+      const referenceData = displayTargetsData.find(td => td.data.length > 0)?.data || []
+      if (referenceData.length > 0) {
+        // 計算在當前顯示範圍內的位置
+        const startOffset = zoomRange ? zoomRange.start : 0
+        const relativeStart = dragStart - startOffset
+        const relativeEnd = dragEnd - startOffset
 
-      // 半透明藍色選擇框
-      ctx.fillStyle = 'rgba(59, 130, 246, 0.2)'
-      ctx.fillRect(startX, padding.top, endX - startX, chartHeight)
+        const x1 = padding.left + (chartWidth / (referenceData.length - 1)) * relativeStart
+        const x2 = padding.left + (chartWidth / (referenceData.length - 1)) * relativeEnd
+        const startX = Math.min(x1, x2)
+        const endX = Math.max(x1, x2)
 
-      // 邊框
-      ctx.strokeStyle = '#3b82f6'
-      ctx.lineWidth = 2
-      ctx.strokeRect(startX, padding.top, endX - startX, chartHeight)
+        // 半透明藍色選擇框
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.2)'
+        ctx.fillRect(startX, padding.top, endX - startX, chartHeight)
+
+        // 邊框
+        ctx.strokeStyle = '#3b82f6'
+        ctx.lineWidth = 2
+        ctx.strokeRect(startX, padding.top, endX - startX, chartHeight)
+      }
     }
   }
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
-    if (!canvas || data.length === 0 || zoomRange) return // 縮放時禁用拖拉
+    if (!canvas || targetsData.length === 0) return
+
+    // 使用第一個有數據的目標作為參考
+    const referenceData = targetsData.find(td => td.data.length > 0)?.data || []
+    if (referenceData.length === 0) return
 
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const padding = 60
     const chartWidth = rect.width - padding - 40
 
-    const index = Math.round(((x - padding) / chartWidth) * (data.length - 1))
+    // 根據當前是否縮放來計算索引
+    const displayData = zoomRange ? referenceData.slice(zoomRange.start, zoomRange.end + 1) : referenceData
+    const index = Math.round(((x - padding) / chartWidth) * (displayData.length - 1))
 
-    if (index >= 0 && index < data.length) {
+    if (index >= 0 && index < displayData.length) {
       setIsDragging(true)
-      setDragStart(index)
-      setDragEnd(index)
+      // 如果已經縮放，索引需要加上偏移
+      const actualIndex = zoomRange ? zoomRange.start + index : index
+      setDragStart(actualIndex)
+      setDragEnd(actualIndex)
     }
   }
 
@@ -320,7 +513,9 @@ export default function SmokepingStyleChart({
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const displayData = zoomRange ? data.slice(zoomRange.start, zoomRange.end + 1) : data
+    // 使用第一個有數據的目標作為參考
+    const referenceData = targetsData.find(td => td.data.length > 0)?.data || []
+    const displayData = zoomRange ? referenceData.slice(zoomRange.start, zoomRange.end + 1) : referenceData
     if (displayData.length === 0) return
 
     const rect = canvas.getBoundingClientRect()
@@ -331,9 +526,10 @@ export default function SmokepingStyleChart({
     const index = Math.round(((x - padding) / chartWidth) * (displayData.length - 1))
 
     if (index >= 0 && index < displayData.length) {
-      if (isDragging && !zoomRange) {
-        // 正在拖拉，更新結束位置
-        setDragEnd(index)
+      if (isDragging) {
+        // 正在拖拉，更新結束位置（需要考慮縮放偏移）
+        const actualIndex = zoomRange ? zoomRange.start + index : index
+        setDragEnd(actualIndex)
       } else {
         // 一般懸停
         setHoveredIndex(index)
@@ -355,10 +551,12 @@ export default function SmokepingStyleChart({
         setZoomRange({ start, end })
 
         // 通知父組件縮放範圍已變更（傳遞時間戳）
-        if (onZoomChange && data[start] && data[end]) {
+        // 使用第一個有數據的目標作為參考
+        const referenceData = targetsData.find(td => td.data.length > 0)?.data || []
+        if (onZoomChange && referenceData[start] && referenceData[end]) {
           onZoomChange({
-            start: data[start].timestamp,
-            end: data[end].timestamp,
+            start: referenceData[start].timestamp,
+            end: referenceData[end].timestamp,
           })
         }
       }
@@ -394,16 +592,18 @@ export default function SmokepingStyleChart({
           packet loss: <span className="font-semibold">{stats.avgLoss.toFixed(2)} %</span> avg{' '}
           <span className="font-semibold">{stats.maxLoss.toFixed(2)} %</span> max
         </div>
-        <div className="flex items-center gap-2">
-          <span>loss color:</span>
-          <span className="inline-block w-4 h-3 bg-green-500"></span> 0
-          <span className="inline-block w-4 h-3 bg-blue-400"></span> 1
-          <span className="inline-block w-4 h-3 bg-blue-600"></span> 2
-          <span className="inline-block w-4 h-3 bg-purple-500"></span> 3
-          <span className="inline-block w-4 h-3 bg-orange-500"></span> 4-7
-          <span className="inline-block w-4 h-3 bg-red-500"></span> 8-15
-          <span className="inline-block w-4 h-3 bg-red-900"></span> 30/30
-        </div>
+        {isSingleTarget && (
+          <div className="flex items-center gap-2">
+            <span>loss color:</span>
+            <span className="inline-block w-4 h-3 bg-green-500"></span> 0
+            <span className="inline-block w-4 h-3 bg-blue-400"></span> 1
+            <span className="inline-block w-4 h-3 bg-blue-600"></span> 2
+            <span className="inline-block w-4 h-3 bg-purple-500"></span> 3
+            <span className="inline-block w-4 h-3 bg-orange-500"></span> 4-7
+            <span className="inline-block w-4 h-3 bg-red-500"></span> 8-15
+            <span className="inline-block w-4 h-3 bg-red-900"></span> 30/30
+          </div>
+        )}
         </div>
 
         {/* 重置縮放按鈕 */}

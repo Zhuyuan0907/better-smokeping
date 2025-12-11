@@ -24,29 +24,84 @@ interface InteractiveTimelineProps {
   data: PingData[]
   selectedTimestamp?: string
   onTimeSelect: (timestamp: string) => void
+  timeRange?: { start: string; end: string } | null
+  fullTimeRange?: number // 完整時間範圍（小時數），用於顯示完整時間軸
 }
 
 export default function InteractiveTimeline({
   data,
   selectedTimestamp,
   onTimeSelect,
+  timeRange,
+  fullTimeRange,
 }: InteractiveTimelineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const [timelinePoints, setTimelinePoints] = useState<TimelinePoint[]>([])
 
   useEffect(() => {
-    if (data.length === 0) return
+    // 確定時間範圍
+    let startTime: number
+    let endTime: number
+
+    if (timeRange) {
+      // 如果有縮放範圍，使用縮放範圍
+      startTime = new Date(timeRange.start).getTime()
+      endTime = new Date(timeRange.end).getTime()
+    } else if (data.length > 0) {
+      // 如果有數據但沒有縮放，使用數據的時間範圍
+      startTime = new Date(data[0].timestamp).getTime()
+      endTime = new Date(data[data.length - 1].timestamp).getTime()
+    } else if (fullTimeRange) {
+      // 如果沒有數據但有 fullTimeRange，生成完整時間範圍
+      endTime = Date.now()
+      startTime = endTime - (fullTimeRange * 60 * 60 * 1000)
+    } else {
+      // 沒有任何數據和配置，不顯示
+      setTimelinePoints([])
+      return
+    }
+
+    // 根據時間範圍過濾數據
+    const displayData = data.filter(d => {
+      const time = new Date(d.timestamp).getTime()
+      return time >= startTime && time <= endTime
+    })
+
+    // 即使沒有數據，也要生成時間點（用於顯示完整時間軸）
+    if (displayData.length === 0 && fullTimeRange) {
+      // 生成空的時間點，僅用於時間標籤顯示
+      setTimelinePoints([])
+      return
+    }
+
+    if (displayData.length === 0) {
+      setTimelinePoints([])
+      return
+    }
 
     // 計算異常點
-    const avgRtts = data.filter(d => d.avgRtt !== null).map(d => d.avgRtt!)
-    const meanRtt = avgRtts.reduce((a, b) => a + b, 0) / avgRtts.length
+    const avgRtts = displayData.filter(d => d.avgRtt !== null).map(d => d.avgRtt!)
+    if (avgRtts.length === 0) {
+      // 所有數據都是 null，創建基本點
+      const points = displayData.map(d => ({
+        timestamp: d.timestamp,
+        hasAnomaly: d.packetLoss > 0,
+        packetLoss: d.packetLoss,
+        rttSpike: false,
+        avgRtt: d.avgRtt,
+      }))
+      setTimelinePoints(points)
+      return
+    }
+
+    const meanRtt = avgRtts.reduce((a: number, b: number) => a + b, 0) / avgRtts.length
     const stdDev = Math.sqrt(
-      avgRtts.map(x => Math.pow(x - meanRtt, 2)).reduce((a, b) => a + b, 0) / avgRtts.length
+      avgRtts.map(x => Math.pow(x - meanRtt, 2)).reduce((a: number, b: number) => a + b, 0) / avgRtts.length
     )
     const spikeThreshold = meanRtt + stdDev * 2 // 2 標準差以上視為異常
 
-    const points = data.map(d => ({
+    const points = displayData.map(d => ({
       timestamp: d.timestamp,
       hasAnomaly: d.packetLoss > 0 || (d.avgRtt !== null && d.avgRtt > spikeThreshold),
       packetLoss: d.packetLoss,
@@ -55,17 +110,17 @@ export default function InteractiveTimeline({
     }))
 
     setTimelinePoints(points)
-  }, [data])
+  }, [data, timeRange, fullTimeRange])
 
   useEffect(() => {
-    if (timelinePoints.length > 0 && canvasRef.current) {
+    if (canvasRef.current) {
       drawTimeline()
     }
-  }, [timelinePoints, selectedTimestamp, hoveredIndex])
+  }, [timelinePoints, selectedTimestamp, hoveredIndex, data, timeRange, fullTimeRange])
 
   const drawTimeline = () => {
     const canvas = canvasRef.current
-    if (!canvas || timelinePoints.length === 0) return
+    if (!canvas) return
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -82,21 +137,66 @@ export default function InteractiveTimeline({
     const padding = { left: 60, right: 40, top: 10, bottom: 25 }
     const timelineWidth = width - padding.left - padding.right
     const timelineHeight = height - padding.top - padding.bottom
-    const pointSpacing = timelineWidth / (timelinePoints.length - 1)
 
     // 清空
     ctx.clearRect(0, 0, width, height)
 
-    // 背景 (透明，使用外層的背景色)
-    ctx.clearRect(0, 0, width, height)
-
-    // 時間軸線
+    // 時間軸線（始終顯示）
     ctx.strokeStyle = '#cbd5e1'
     ctx.lineWidth = 2
     ctx.beginPath()
     ctx.moveTo(padding.left, padding.top + timelineHeight / 2)
     ctx.lineTo(width - padding.right, padding.top + timelineHeight / 2)
     ctx.stroke()
+
+    // 如果沒有數據點，只顯示時間標籤
+    if (timelinePoints.length === 0) {
+      // 確定時間範圍用於時間標籤
+      let startTime: number
+      let endTime: number
+
+      if (timeRange) {
+        startTime = new Date(timeRange.start).getTime()
+        endTime = new Date(timeRange.end).getTime()
+      } else if (data.length > 0) {
+        startTime = new Date(data[0].timestamp).getTime()
+        endTime = new Date(data[data.length - 1].timestamp).getTime()
+      } else if (fullTimeRange) {
+        endTime = Date.now()
+        startTime = endTime - (fullTimeRange * 60 * 60 * 1000)
+      } else {
+        return
+      }
+
+      // 繪製時間標籤（6 個時間點）
+      ctx.fillStyle = '#6b7280'
+      ctx.font = '11px monospace'
+      ctx.textAlign = 'center'
+      const timeLabels = 6
+      for (let i = 0; i < timeLabels; i++) {
+        const ratio = i / (timeLabels - 1)
+        const timestamp = startTime + (endTime - startTime) * ratio
+        const x = padding.left + timelineWidth * ratio
+        const time = format(new Date(timestamp), 'HH:mm')
+        ctx.fillText(time, x, height - 5)
+      }
+
+      // 繪製圖例
+      ctx.textAlign = 'left'
+      ctx.font = '10px monospace'
+      const legendX = padding.left
+      const legendY = padding.top + 2
+
+      ctx.fillStyle = '#94a3b8'
+      ctx.beginPath()
+      ctx.arc(legendX, legendY, 2, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillText('無數據', legendX + 8, legendY + 4)
+
+      return
+    }
+
+    const pointSpacing = timelineWidth / (timelinePoints.length - 1)
 
     // 繪製點
     timelinePoints.forEach((point, index) => {
@@ -245,14 +345,17 @@ export default function InteractiveTimeline({
     setHoveredIndex(null)
   }
 
-  if (timelinePoints.length === 0) {
+  // 即使沒有數據點，也要顯示時間軸（如果有 fullTimeRange）
+  const shouldShow = timelinePoints.length > 0 || fullTimeRange || data.length > 0
+
+  if (!shouldShow) {
     return null
   }
 
   return (
     <div className="mt-4">
       <h4 className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">
-        時間軸 • 點擊選擇時間點
+        時間軸{timelinePoints.length > 0 ? ' • 點擊選擇時間點' : ' • 無數據'}
       </h4>
       <canvas
         ref={canvasRef}
