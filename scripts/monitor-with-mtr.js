@@ -13,7 +13,7 @@ const prisma = new PrismaClient()
 
 const PING_INTERVAL = parseInt(process.env.PING_INTERVAL || '60000') // 60 seconds
 const PING_COUNT = parseInt(process.env.PING_COUNT || '30')
-const MTR_INTERVAL = 5 * 60 * 1000 // 5 minutes
+const MTR_INTERVAL = 60 * 1000 // 1 minute
 const MTR_COUNT = 10
 
 let mtrTimers = new Map()
@@ -111,7 +111,7 @@ async function runMTR(target) {
 
       const mtrData = JSON.parse(stdout)
 
-      // 對每個跳進行 DNS 反查
+      // 對每個跳進行 DNS 反查並整理完整統計數據
       const hops = await Promise.all(
         mtrData.report.hubs.map(async (hub, index) => {
           const ip = hub.host
@@ -121,11 +121,13 @@ async function runMTR(target) {
             hop: index + 1,
             ip: ip,
             hostname: hostname,
+            loss: hub.loss || 0,
+            sent: hub.count || MTR_COUNT,
+            last: hub.last || hub.avg,
             avgRtt: hub.avg,
-            loss: hub.loss,
-            rtt1: hub.avg,
-            rtt2: hub.avg,
-            rtt3: hub.avg,
+            minRtt: hub.best || hub.avg,
+            maxRtt: hub.wrst || hub.avg,
+            stdDev: hub.stdev || 0,
           }
         })
       )
@@ -252,7 +254,7 @@ async function main() {
   console.log('啟動 Better Smokeping 監測服務...')
   console.log(`Ping 間隔: ${PING_INTERVAL}ms`)
   console.log(`Ping 次數: ${PING_COUNT}`)
-  console.log(`MTR 間隔: ${MTR_INTERVAL / 1000 / 60} 分鐘`)
+  console.log(`MTR 間隔: ${MTR_INTERVAL / 1000} 秒`)
 
   // 立即執行一次
   await monitorTargets()

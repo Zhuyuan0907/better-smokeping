@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Activity } from 'lucide-react'
 import CompactSidebar from '@/components/CompactSidebar'
-import SmokepingStyleChart from '@/components/SmokepingStyleChart'
+import SmokepingStyleChart, { InteractiveTimeline } from '@/components/SmokepingStyleChart'
 import SimpleMTRView from '@/components/SimpleMTRView'
 
 export default function HomePage() {
@@ -13,6 +13,8 @@ export default function HomePage() {
   const [timeRange, setTimeRange] = useState<string>('24')
   const [loading, setLoading] = useState(true)
   const [selectedTimestamp, setSelectedTimestamp] = useState<string | undefined>()
+  const [pingData, setPingData] = useState<any[]>([])
+  const [zoomTimeRange, setZoomTimeRange] = useState<{ start: string; end: string } | null>(null)
 
   useEffect(() => {
     fetchTargets()
@@ -97,15 +99,31 @@ export default function HomePage() {
                 hours={parseInt(timeRange)}
                 selectedTimestamp={selectedTimestamp}
                 onTimeSelect={setSelectedTimestamp}
+                onDataLoad={setPingData}
+                onZoomChange={setZoomTimeRange}
               />
             </div>
 
+            {/* 互動式時間軸 - 放在圖表與 MTR 之間 */}
+            {pingData.length > 0 && (
+              <div className="mt-4">
+                <InteractiveTimeline
+                  data={pingData}
+                  selectedTimestamp={selectedTimestamp}
+                  onTimeSelect={setSelectedTimestamp}
+                />
+              </div>
+            )}
+
             {/* MTR - 簡化樣式 */}
-            <SimpleMTRView
-              targetId={selectedTarget.id}
-              targetHost={selectedTarget.host}
-              selectedTimestamp={selectedTimestamp}
-            />
+            <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
+              <SimpleMTRView
+                targetId={selectedTarget.id}
+                targetHost={selectedTarget.host}
+                selectedTimestamp={selectedTimestamp}
+                timeRange={zoomTimeRange}
+              />
+            </div>
           </div>
         ) : (
           <div className="flex items-center justify-center h-full">
