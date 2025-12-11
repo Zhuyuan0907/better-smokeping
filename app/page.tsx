@@ -57,11 +57,19 @@ export default function HomePage() {
   const handleSelectTarget = (target: any) => {
     setSelectedTarget(target)
     setSelectedGroup(null)
+    // 重置狀態，避免顯示舊數據
+    setSelectedTimestamp(undefined)
+    setZoomTimeRange(null)
+    setPingData([])
   }
 
   const handleSelectGroup = (group: string) => {
     setSelectedGroup(group)
     setSelectedTarget(null)
+    // 重置狀態，避免顯示舊數據
+    setSelectedTimestamp(undefined)
+    setZoomTimeRange(null)
+    setPingData([])
   }
 
   // 獲取當前選擇的目標列表

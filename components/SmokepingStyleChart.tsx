@@ -65,6 +65,17 @@ export default function SmokepingStyleChart({
 
   const isSingleTarget = targets.length === 1
 
+  // 當目標改變時，重置所有狀態
+  useEffect(() => {
+    setTargetsData([])
+    setLoading(true)
+    setHoveredIndex(null)
+    setIsDragging(false)
+    setDragStart(null)
+    setDragEnd(null)
+    setZoomRange(null)
+  }, [targets])
+
   useEffect(() => {
     fetchAllData()
     const interval = setInterval(fetchAllData, 60000)
@@ -86,7 +97,10 @@ export default function SmokepingStyleChart({
 
       const results = await Promise.all(
         targets.map(async (target) => {
-          const res = await fetch(`/api/ping/${target.id}?hours=${hours}`)
+          // 根據時間範圍調整 limit，確保能獲取足夠的數據
+          // 每分鐘一筆數據：1小時=60, 24小時=1440, 7天=10080, 30天=43200
+          const limit = hours <= 24 ? 2000 : hours <= 168 ? 15000 : 50000
+          const res = await fetch(`/api/ping/${target.id}?hours=${hours}&limit=${limit}`)
           const result = await res.json()
 
           if (result.results && result.results.length > 0) {
@@ -293,12 +307,13 @@ export default function SmokepingStyleChart({
       const displayData = targetData.data
       if (displayData.length === 0) return
 
-      // 單一目標：使用掉包率決定顏色
+      // 單一目標：預設綠色，有掉包才用 loss color
       // 多目標：使用固定的目標顏色
       let lineColor: string
       if (isSingleTarget) {
         const maxLossInDisplay = Math.max(...displayData.map(d => d.packetLoss))
-        lineColor = getColorForLoss(maxLossInDisplay)
+        // 只有在有掉包時才使用 loss color，否則使用綠色
+        lineColor = maxLossInDisplay > 0 ? getColorForLoss(maxLossInDisplay) : '#22c55e'
       } else {
         lineColor = TARGET_COLORS[targetIndex % TARGET_COLORS.length]
       }
@@ -360,11 +375,13 @@ export default function SmokepingStyleChart({
     if (referenceData.length > 0) {
       ctx.textAlign = 'center'
       const timeLabels = 6
+      // 根據時間範圍選擇合適的時間格式
+      const timeFormat = hours <= 24 ? 'HH:mm' : hours <= 168 ? 'MM/dd HH:mm' : 'MM/dd'
       for (let i = 0; i < timeLabels; i++) {
         const index = Math.floor((referenceData.length / (timeLabels - 1)) * i)
         if (index >= referenceData.length) continue
         const x = padding.left + (chartWidth / (referenceData.length - 1)) * index
-        const time = format(new Date(referenceData[index].timestamp), 'HH:mm')
+        const time = format(new Date(referenceData[index].timestamp), timeFormat)
         ctx.fillText(time, x, height - 10)
       }
     }

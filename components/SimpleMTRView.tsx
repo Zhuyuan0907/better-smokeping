@@ -186,19 +186,19 @@ export default function SimpleMTRView({
                   {hop.sent || 10}
                 </td>
                 <td className="py-0.5 px-2 text-right">
-                  {hop.last !== undefined && hop.last > 0 ? hop.last.toFixed(1) : '---'}
+                  {hop.last !== undefined && hop.last !== null ? hop.last.toFixed(1) : '---'}
                 </td>
                 <td className="py-0.5 px-2 text-right">
-                  {hop.avgRtt !== undefined && hop.avgRtt > 0 ? hop.avgRtt.toFixed(1) : '---'}
+                  {hop.avgRtt !== undefined && hop.avgRtt !== null ? hop.avgRtt.toFixed(1) : '---'}
                 </td>
                 <td className="py-0.5 px-2 text-right">
-                  {hop.minRtt !== undefined && hop.minRtt > 0 ? hop.minRtt.toFixed(1) : '---'}
+                  {hop.minRtt !== undefined && hop.minRtt !== null ? hop.minRtt.toFixed(1) : '---'}
                 </td>
                 <td className="py-0.5 px-2 text-right">
-                  {hop.maxRtt !== undefined && hop.maxRtt > 0 ? hop.maxRtt.toFixed(1) : '---'}
+                  {hop.maxRtt !== undefined && hop.maxRtt !== null ? hop.maxRtt.toFixed(1) : '---'}
                 </td>
                 <td className="py-0.5 px-2 text-right">
-                  {hop.stdDev !== undefined && hop.stdDev > 0 ? hop.stdDev.toFixed(1) : '0.0'}
+                  {hop.stdDev !== undefined && hop.stdDev !== null ? hop.stdDev.toFixed(1) : '0.0'}
                 </td>
               </tr>
             ))}
