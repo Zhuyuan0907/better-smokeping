@@ -28,8 +28,11 @@ export default function CompactSidebar({
   onSelectTarget,
 }: CompactSidebarProps) {
   const { theme, setTheme } = useTheme()
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [searchTerm, setSearchTerm] = useState('')
+
+  // 獲取所有分組，預設全部折疊
+  const allGroups = Array.from(new Set(targets.map(t => t.group || '未分類')))
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(allGroups))
 
   const groupedTargets = targets.reduce((acc, target) => {
     const group = target.group || '未分類'

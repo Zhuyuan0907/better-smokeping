@@ -145,50 +145,50 @@ export default function SmokepingChart({
 
   return (
     <div className="space-y-4">
-      {/* 統計資訊 */}
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-lg text-sm">
+      {/* 統計資訊 - 簡化 */}
+      <div className="flex items-center justify-between px-3 py-2 text-xs text-slate-600 dark:text-slate-400">
         <div className="flex items-center gap-6">
           <div>
-            <span className="text-muted-foreground">平均:</span>
+            <span className="text-slate-500 dark:text-slate-500">平均</span>
             <span className="ml-2 font-mono font-semibold text-blue-600 dark:text-blue-400">
-              {stats.avgRtt.toFixed(2)} ms
+              {stats.avgRtt.toFixed(1)} ms
             </span>
           </div>
           <div>
-            <span className="text-muted-foreground">最小:</span>
+            <span className="text-slate-500 dark:text-slate-500">最小</span>
             <span className="ml-2 font-mono font-semibold text-green-600 dark:text-green-400">
-              {stats.minRtt.toFixed(2)} ms
+              {stats.minRtt.toFixed(1)} ms
             </span>
           </div>
           <div>
-            <span className="text-muted-foreground">最大:</span>
+            <span className="text-slate-500 dark:text-slate-500">最大</span>
             <span className="ml-2 font-mono font-semibold text-red-600 dark:text-red-400">
-              {stats.maxRtt.toFixed(2)} ms
+              {stats.maxRtt.toFixed(1)} ms
             </span>
           </div>
           <div>
-            <span className="text-muted-foreground">平均遺失:</span>
+            <span className="text-slate-500 dark:text-slate-500">遺失</span>
             <span className="ml-2 font-mono font-semibold text-orange-600 dark:text-orange-400">
-              {stats.avgLoss.toFixed(2)} %
+              {stats.avgLoss.toFixed(2)}%
             </span>
           </div>
           {stats.avgJitter > 0 && (
             <div>
-              <span className="text-muted-foreground">平均抖動:</span>
+              <span className="text-slate-500 dark:text-slate-500">抖動</span>
               <span className="ml-2 font-mono font-semibold text-purple-600 dark:text-purple-400">
-                {stats.avgJitter.toFixed(2)} ms
+                {stats.avgJitter.toFixed(1)} ms
               </span>
             </div>
           )}
         </div>
-        <div className="text-xs text-muted-foreground">
-          {data.length} 個數據點 • 每 60 秒更新
+        <div className="text-slate-400 dark:text-slate-600">
+          {data.length} 筆 • 60s 更新
         </div>
       </div>
 
-      {/* 合併圖表 */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
-        <ResponsiveContainer width="100%" height={450}>
+      {/* 合併圖表 - 移除邊框 */}
+      <div className="py-2">
+        <ResponsiveContainer width="100%" height={400}>
           <ComposedChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" className="dark:stroke-slate-700" />
 

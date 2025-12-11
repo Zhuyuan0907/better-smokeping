@@ -6,6 +6,7 @@
 const { PrismaClient } = require('@prisma/client')
 const { exec } = require('child_process')
 const { promisify } = require('util')
+const dns = require('dns').promises
 
 const execAsync = promisify(exec)
 const prisma = new PrismaClient()
@@ -88,27 +89,46 @@ async function ping(host, count = PING_COUNT) {
   }
 }
 
+// DNS 反查函數
+async function reverseDNS(ip) {
+  try {
+    const hostnames = await dns.reverse(ip)
+    return hostnames[0] || ip
+  } catch (error) {
+    return ip // 如果反查失敗，返回 IP
+  }
+}
+
 async function runMTR(target) {
   try {
     console.log(`執行 MTR: ${target.name} (${target.host})`)
 
-    // 嘗試使用 mtr
+    // 嘗試使用 mtr（使用 -n 獲取純 IP，然後自己反查 DNS）
     try {
       const { stdout } = await execAsync(`mtr -c ${MTR_COUNT} -n -b -j ${target.host}`, {
         timeout: 60000,
       })
 
       const mtrData = JSON.parse(stdout)
-      const hops = mtrData.report.hubs.map((hub, index) => ({
-        hop: index + 1,
-        ip: hub.host,
-        hostname: hub.host,
-        avgRtt: hub.avg,
-        loss: hub.loss,
-        rtt1: hub.avg,
-        rtt2: hub.avg,
-        rtt3: hub.avg,
-      }))
+
+      // 對每個跳進行 DNS 反查
+      const hops = await Promise.all(
+        mtrData.report.hubs.map(async (hub, index) => {
+          const ip = hub.host
+          const hostname = await reverseDNS(ip)
+
+          return {
+            hop: index + 1,
+            ip: ip,
+            hostname: hostname,
+            avgRtt: hub.avg,
+            loss: hub.loss,
+            rtt1: hub.avg,
+            rtt2: hub.avg,
+            rtt3: hub.avg,
+          }
+        })
+      )
 
       await prisma.tracerouteResult.create({
         data: {
@@ -127,18 +147,21 @@ async function runMTR(target) {
       })
 
       const lines = stdout.split('\n').slice(1)
-      const hops = lines
+      const hopsPromises = lines
         .filter((line) => line.trim())
-        .map((line) => {
+        .map(async (line) => {
           const parts = line.trim().split(/\s+/)
           const hop = parseInt(parts[0])
           const ip = parts[1] !== '*' ? parts[1] : '???'
           const rtts = parts.slice(2).filter((p) => p.endsWith('ms')).map((p) => parseFloat(p))
 
+          // DNS 反查
+          const hostname = ip !== '???' ? await reverseDNS(ip) : '???'
+
           return {
             hop,
             ip,
-            hostname: ip,
+            hostname: hostname,
             rtt1: rtts[0],
             rtt2: rtts[1],
             rtt3: rtts[2],
@@ -146,6 +169,8 @@ async function runMTR(target) {
             loss: 0,
           }
         })
+
+      const hops = await Promise.all(hopsPromises)
 
       await prisma.tracerouteResult.create({
         data: {
