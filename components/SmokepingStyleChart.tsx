@@ -89,12 +89,24 @@ export default function SmokepingStyleChart({
   }, [targetsData, hoveredIndex, selectedTimestamp, dragStart, dragEnd, zoomRange])
 
   const fetchAllData = async () => {
+    console.log('[SmokepingChart] fetchAllData called, targets:', targets.length, 'targetsData:', targetsData.length)
+
+    // 如果沒有目標，直接返回
+    if (targets.length === 0) {
+      console.log('[SmokepingChart] No targets, clearing data')
+      setTargetsData([])
+      setLoading(false)
+      return
+    }
+
     // 只在初次載入時顯示 loading
     if (targetsData.length === 0) {
+      console.log('[SmokepingChart] Setting loading to true')
       setLoading(true)
     }
 
     try {
+      console.log('[SmokepingChart] Fetching data for', targets.length, 'targets')
       const results = await Promise.all(
         targets.map(async (target) => {
           // 根據時間範圍調整 limit，確保能獲取足夠的數據
@@ -126,6 +138,7 @@ export default function SmokepingStyleChart({
         })
       )
 
+      console.log('[SmokepingChart] Fetched data:', results.map(r => ({ target: r.target.name, dataLength: r.data.length })))
       setTargetsData(results)
 
       // 通知父組件數據已載入
@@ -142,8 +155,9 @@ export default function SmokepingStyleChart({
         }
       }
     } catch (error) {
-      console.error('獲取數據失敗:', error)
+      console.error('[SmokepingChart] 獲取數據失敗:', error)
     } finally {
+      console.log('[SmokepingChart] Setting loading to false')
       setLoading(false)
     }
   }
